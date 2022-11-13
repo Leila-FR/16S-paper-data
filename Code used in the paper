@@ -86,19 +86,13 @@ ps <- prune_samples(  sample_names(ps) != "22Apr5828-DL083" &
                         sample_names(ps) != "22Apr5828-DL095"&
                         sample_names(ps) != "22Apr5828-DL096", ps)
 ps
-
-#Save  DNA sequences
-dna <- Biostrings::DNAStringSet(taxa_names(ps))
-names(dna) <- taxa_names(ps)
-ps <- merge_phyloseq(ps, dna)
-taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps))) #to remove DNA sequence as labels
 saveRDS(ps, "ps.rds")
 
 # Create table, number of features for each phyla
 table(tax_table(ps)[, "Phylum"], exclude = NULL)
 
-#CST 
-##Diversity analysis
-#Alpha diversity
-#Beta diversity
+#CST identification
+#Diversity analysis
+##Alpha diversity (package microbial)
+##Beta diversity
 
