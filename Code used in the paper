@@ -292,6 +292,113 @@ write.csv(p.table, "pairewise adonis dist unweighted.csv")
 write.csv(p.table, "pairewise adonis dist weighted.csv")
 
 ##Differential abundance analysis 
+#ANCOMBC 
 
+ps<- tax_glom(ps_CST, taxrank = "Genus")
 
+#manually change the reference level, for instance, setting "Healthy"as the reference level, use:
+sample_data(ps)$Group <- as.factor(sample_data(ps)$Group)
+sample_data(ps)$Group <- relevel(sample_data(ps)$Group, "Healthy")
 
+#Run ancombc function
+out = ancombc(phyloseq=ps, formula="Group", 
+              p_adj_method = 'holm', lib_cut=1000,
+              group='Group', struc_zero=F, neg_lb=TRUE, tol = 1e-5,
+              max_iter=100, conserve=TRUE, alpha = 0.05, global=TRUE)
+res = out$res
+res_global = out$res_global
+write.csv(res_global, "res_global final .csv")
+
+#Visualization
+ancom <- out
+chlamydia <- tibble(W=ancom$res$W$GroupCT, lfc=ancom$res$beta$GroupCT, ASV=rownames(ancom$res$W),q=ancom$res$q_val$GroupCT)
+n_taxa = ifelse(is.null(ancom$zero_ind), 
+                nrow(ancom$feature_table), 
+                sum(apply(ancom$zero_ind, 1, sum) == 0))
+
+cut_off = 0.7 * (n_taxa - 1)
+chlamydia %>% 
+  mutate(sig_fill = case_when( 
+    q < 0.05 ~ 'sig',
+    T ~ 'insig'
+  ) ) %>%
+  ggplot(aes(x=ASV, y=W, fill=sig_fill)) +
+  geom_point(shape=21, size=2, aes(alpha=0.9)) +
+  theme_bw() + 
+  theme(legend.position = 'none',
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+  ) +
+  scale_x_discrete(expand=expansion(add =c(2,2))) +
+  ylim(-5,5) +
+  scale_fill_manual(values=c('#000000','#FF0000')) +
+  annotate('text',x=4,y=-4,label='',hjust=0, fontface='bold') 
+
+#Enhancedvolcano plot for Chlamydia positive group
+EnhancedVolcano(chlamydia, 
+                title=NULL,
+                subtitle=NULL,
+                lab=NA,
+                selectLab = NULL,
+                x='lfc', y='q', 
+                pCutoff = 0.05, 
+                FCcutoff = 20,
+                xlab = bquote(~Log[2]~'fold change'),
+                ylim=c(0,3),xlim=c(-3,3),
+                caption=NULL,
+                legendPosition= 'none'
+) + 
+  labs(caption=c('Chlamydia','Healthy')) + theme(plot.caption = element_text(hjust=c(0,1))) +
+  annotate("text", x=0,y=1.4,label='adj p <0.05') +
+  annotate("text",x=3.0,y=0.13, label=' W[0.7] > 102', angle=90, parse=T,hjust=0) + 
+  annotate("text",x=3.0,y=0.11, label='???', hjust=0) + 
+  annotate("text",x=-2.8,y=0.13, label=' W[0.7] < -102', angle=90, parse=T,hjust=0) +
+  annotate("text",x=-3.0,y=0.11, label='???' ,hjust=0) + 
+  annotate("text",x=-1.7,y=1.5, label='B. fragilis', fontface='bold',hjust=0) 
+
+#Visualization Healthy vs HPV
+HPV <- tibble(W=ancom$res$W$'GroupHPV', lfc=ancom$res$beta$'GroupHPV', ASV=rownames(ancom$res$W),q=ancom$res$q_val$'GroupHPV')
+n_taxa = ifelse(is.null(ancom$zero_ind), 
+                nrow(ancom$feature_table), 
+                sum(apply(ancom$zero_ind, 1, sum) == 0))
+
+cut_off = 0.7 * (n_taxa - 1)
+HPV%>% 
+  mutate(sig_fill = case_when( 
+    q < 0.05 ~ 'sig',
+    T ~ 'insig'
+  ) ) %>%
+  ggplot(aes(x=ASV, y=W, fill=sig_fill)) +
+  geom_point(shape=21, size=2, aes(alpha=0.9)) +
+  theme_bw() + 
+  theme(legend.position = 'none',
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+  ) +
+  scale_x_discrete(expand=expansion(add =c(2,2))) +
+  ylim(-5,5) +
+  scale_fill_manual(values=c('#000000','#FF0000')) +
+  annotate('text',x=4,y=-4,label='',hjust=0, fontface='bold') 
+#Enhancedvolcano plot for HPV positive group
+EnhancedVolcano(HPV, 
+                title=NULL,
+                subtitle=NULL,
+                lab=NA,
+                selectLab = NULL,
+                x='lfc', y='q', 
+                pCutoff = 0.05, 
+                FCcutoff = 20,
+                xlab = bquote(~Log[2]~'fold change'),
+                ylim=c(0,3),xlim=c(-3,3),
+                caption=NULL,
+                legendPosition= 'none'
+) + 
+  labs(caption=c('HPV','Healthy')) + theme(plot.caption = element_text(hjust=c(0,1))) +
+  annotate("text", x=0,y=1.4,label='adj p <0.05') +
+  annotate("text",x=3.0,y=0.13, label=' W[0.7] > 102', angle=90, parse=T,hjust=0) + 
+  annotate("text",x=3.0,y=0.11, label='???', hjust=0) + 
+  annotate("text",x=-2.8,y=0.13, label=' W[0.7] < -102', angle=90, parse=T,hjust=0) +
+  annotate("text",x=-3.0,y=0.11, label='???' ,hjust=0) + 
+  annotate("text",x=-1.7,y=1.5, label='R. alistipes', fontface='bold',hjust=0) 
