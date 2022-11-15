@@ -27,6 +27,7 @@ library(DT)
 library(ggtree)
 library(ape)
 library(cluster)
+library (rstatix)
 
 #We started the analysis from the received the sequence table without chimera sequences
 
@@ -182,17 +183,115 @@ plot_bar(top10P , x="Group", fill="Genus",facet_grid = ~Phylum) +
          fontsize.x = 10,
          fontsize.y = 12)
          
-##Figure 3: heatmap
+##Figure 4: heatmap
 ps1 <- tax_glom(ps,taxrank = "Species")
 heat.sample <- plot_taxa_heatmap(ps1, subset.top = 30,
                                  Variable = c("New_var", "Group"),
                                  heatcolors = met.brewer("Troy",30),
                                  transformation = "compositional")
+#Figure supplementary file
+#Lactobacillus species relative abundance 
+#subset phyloseq object to include only genus Lactobacillus
+Lactobacillus = subset_taxa(ps, Genus == "Lactobacillus")
+phy <- normalize(Lactobacillus, method = "rarefy")
 
-         
+#by group
+plotbar(phy,level="Species", group="Group",
+        color = met.brewer("Troy", 5),
+        top = 5,
+        fontsize.x = 10,
+        fontsize.y = 12)
+#by CST
+plotbar(phy,level="Species", group="New_var",
+        color = met.brewer("Troy", 5),
+        top = 5,
+        fontsize.x = 10,
+        fontsize.y = 12)
 #Diversity analysis
 ##Alpha diversity (package microbial)
 
-##Beta diversity
+ #Figure 3
+ plotalpha(ps, 
+           group = "New_var",
+           method = c("Observed", "Simpson", "Shannon", "Chao1"),
+           color = met.brewer("Troy",6))
+#Figure 5:
+ plotalpha(ps, 
+           group = "Group",
+           method = c("Observed", "Simpson", "Shannon", "Chao1"),
+           color = met.brewer("Troy",4))
+ #Figure 6:
+##Alpha diversity box plot with p values
+a_my_comparisons <- list( c("Normale","Anormale" ))
+symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))
+
+#we can rarefy in order to bring the samples to the same depth
+# rarefy without replacement
+ps.rarefied <- rarefy_even_depth(ps, rngseed=1, sample.size=0.9*min(sample_sums(ps)), replace=F)
+
+#Plot
+plot_richness(ps.rarefied, x="Cytologie", measures=c("Shannon", "Simpson", "Chao1", "Observed"), color = "Group")+
+  geom_boxplot(alpha=0.6)+ 
+  theme(legend.position="right", axis.text.x=element_text(angle=45,hjust=1,vjust=1,size=12))+
+  stat_compare_means(method = "t.test", comparisons = a_my_comparisons, label = "p.signif", symnum.args = symnum.args)+
+  scale_color_manual(values=met.brewer("Troy", 4))
+
+##Beta diversity (library(vegan))
+metadata <- data.frame(sample_data(ps.rarefied))
+#Generate distances
+ord_unifrac <- ordinate(ps.rarefied, method = "PCoA", distance = "wunifrac") 
+ord_unifrac_un <- ordinate(ps.rarefied, method = "PCoA", distance = "unifrac")   
+
+# Figure : Plot ordinations
+a <- plot_ordination(ps.rarefied, ord_unifrac, color = "Group") + geom_point(size = 2)+scale_color_manual(values =met.brewer("Troy",5) )
+b <- plot_ordination(ps.rarefied, ord_unifrac_un, color = "Group") + geom_point(size = 2)+scale_color_manual(values =met.brewer("Troy",5) )
+cowplot::plot_grid(a, b, nrow = 1, ncol = 2, scale = .9, labels = c("Weighted", "Unweighted"))
+
+#Compute distance
+a<- phyloseq::distance(ps, "uunifrac", type= "Group") # Unweighted UniFrac
+b<- phyloseq::distance(ps, "wunifrac", type = "Group") # weighted UniFrac
+c<- phyloseq::distance(ps, "bray", type = "samples") #Bray
+
+#Adonis
+# Unweighted UniFrac
+test.adonis_a <- adonis(a ~ Group, data = metadata)
+test.adonis_a <- as.data.frame(test.adonis_a$aov.tab)
+test.adonis_a
+
+# weighted UniFrac
+test.adonis_b <- adonis(b ~ Group, data = metadata)
+test.adonis_b <- as.data.frame(test.adonis_b$aov.tab)
+test.adonis_b
+
+#Bray
+test.adonis_c <- adonis(c ~ Group, data = metadata)
+test.adonis_c <- as.data.frame(test.adonis_c$aov.tab)
+test.adonis_c
+
+#pairwise adonis
+dist = phyloseq::distance(ps.rarefied, method="bray")
+test.adonis <- adonis(dist ~ Group, data = metadata)
+test.adonis <- as.data.frame(test.adonis$aov.tab)
+test.adonis
+
+cbn <- combn(x=unique(metadata$Group), m = 2)
+p <- c()
+
+for(i in 1:ncol(cbn)){
+  ps.subs <- subset_samples(ps.rarefied, Group %in% cbn[,i])
+  metadata_sub <- data.frame(sample_data(ps.subs))
+  permanova_pairwise <- adonis(phyloseq::distance(ps.subs, method = "bray") ~ Group, data = metadata_sub)
+  p <- c(p, permanova_pairwise$aov.tab$`Pr(>F)`[1])
+}
+p.adj <- p.adjust(p, method = "BH")
+p.table <- cbind.data.frame(t(cbn), p=p, p.adj=p.adj)
+p.table
+# Same code for weighted and unweighted distance we just specify the method the we save each table
+write.csv(p.table, "pairewise adonis dist bray.csv")
+write.csv(p.table, "pairewise adonis dist unweighted.csv")
+write.csv(p.table, "pairewise adonis dist weighted.csv")
+
+##Differential abundance analysis 
+
 
 
