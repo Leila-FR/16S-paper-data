@@ -18,6 +18,15 @@ library (MetBrewer) # nice color options (Blake s. d.)
 library (DT) # interactive tables in html and markdown
 library(data.table) # alternative to data.frame
 library(microbial)
+library(NbClust)
+library(ecodist)
+library(mia)
+library(vegan)
+library(dendextend)
+library(DT)
+library(ggtree)
+library(ape)
+library(cluster)
 
 #We started the analysis from the received the sequence table without chimera sequences
 
@@ -91,8 +100,99 @@ saveRDS(ps, "ps.rds")
 # Create table, number of features for each phyla
 table(tax_table(ps)[, "Phylum"], exclude = NULL)
 
-#CST identification
+#Exclude uncharacyerized 
+ps <- subset_taxa(ps, !is.na(Phylum) & !Phylum %in% c("", "uncharacterized"))
+table(tax_table(ps)[, "Phylum"], exclude = NULL)
+
+#Identification cervical community state types (CSTs) 
+#Hierarchical clustering of the taxonomic profiles using Bray-Curtis distances and ward linkage was first employed to define the vaginal (ravel et al)
+#computing the Bray-Curtis "distance" (or dissimilarity)
+# compute distances
+
+dist <-  phyloseq::distance(ps, method="bray")
+dist <-  phyloseq::distance(Lactobacillus, method="bray")
+
+# Determine the optimal number of clusters
+res <- NbClust(diss = dist, distance = NULL, method = "ward.D2",
+               index = "silhouette")
+res$Best.nc
+
+# Decide on clusters: choose 6 cluster
+cutree(hc, k = 6)
+my_cut <- cutree(hc, k = 6)
+
+# number of observations in each cluster
+table(my_cut)
+
+# make a table for each observation, of label and cluster
+data <- data.frame(label = hc$labels,
+           clust = my_cut)
+
+# Making colors for 6 clusters
+col_val_map <- met.brewer("Hokusai1", 6) %>%
+  as.list() %>% setNames(paste0("clust_",seq(6)))
+
+#Plot dendogramme
+dend <- color_branches(dendro, k=6, col=unlist(col_val_map))
+plot(dend)
+
+#Adding new column (CSTs) to metadata in phyloseq object
+sam.new <- data.frame(New_var = sample(CSTs, size = nsamples(ps), replace = TRUE))
+
+# Mix up the sample names (just for demonstration purposes)
+rownames(sam.new) <- sample(sample_names(ps))
+
+# Turn into `sample_data` 
+sam.new <- sample_data(sam.new)
+head(sam.new)
+
+ps <- merge_phyloseq(ps, sam.new)
+head(sample_data(ps))
+saveRDS(ps, "ps_CST.rds")
+
+#Abundance plots
+# Figure1: Bacterial phyla and genus relative abundance. The figure shows bar charts of the relative abundance of the most relevant bacterial phyla in the 4 categories. 
+#Healthy, HPV, CT: Chlamydia trachomatis, and HPV/CT coinfected group. Phyla and genre are identified by colors as indicated. Numbers are absolute abundance 
+ps<-ps_CST
+
+#Agglomerate taxa
+ps_genus<- phyloseq::tax_glom(ps, "Genus")
+
+#We filter genus that are usually contaminants
+# Define genre to filter
+filterGenus = c("Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium", "Variovorax")
+
+# Filter entries
+ps_genus = subset_taxa(ps_genus, !Genus %in% filterGenus)
+ps_genus
+
+# Sort by top 10 genus
+top10P.genus = sort(tapply(taxa_sums(ps_genus), tax_table(ps_genus)[, "Genus"], sum), TRUE)[1:10]
+top10P = subset_taxa(ps_genus, Genus %in% names(top10P.genus))
+
+#Plot
+plot_bar(top10P , x="Group", fill="Genus",facet_grid = ~Phylum) +
+  geom_bar(aes(color=Genus, fill=Genus), stat="identity", position="stack")
+
+##Figure2:  Bar plot of the relative abundance of the top 10 dominant species in each community state type (CST).
+ phy <- normalize(ps_genus, method = "rarefy")
+  plotbar(phy,level="Genus", group="New_var",
+         color = met.brewer("Troy", 10),
+         top = 10,
+         fontsize.x = 10,
+         fontsize.y = 12)
+         
+##Figure 3: heatmap
+ps1 <- tax_glom(ps,taxrank = "Species")
+heat.sample <- plot_taxa_heatmap(ps1, subset.top = 30,
+                                 Variable = c("New_var", "Group"),
+                                 heatcolors = met.brewer("Troy",30),
+                                 transformation = "compositional")
+
+         
 #Diversity analysis
 ##Alpha diversity (package microbial)
+
 ##Beta diversity
+
 
