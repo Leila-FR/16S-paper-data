@@ -18,15 +18,12 @@ library (MetBrewer) # nice color options (Blake s. d.)
 library (DT) # interactive tables in html and markdown
 library(data.table) # alternative to data.frame
 library(microbial)
-library(NbClust)
 library(ecodist)
 library(mia)
 library(vegan)
-library(dendextend)
 library(DT)
 library(ggtree)
 library(ape)
-library(cluster)
 library (rstatix)
 
 #We started the analysis from the received the sequence table without chimera sequences
@@ -152,8 +149,8 @@ head(sample_data(ps))
 saveRDS(ps, "ps_CST.rds")
 
 #Abundance plots
-# Figure1: Bacterial phyla and genus relative abundance. The figure shows bar charts of the relative abundance of the most relevant bacterial phyla in the 4 categories. 
-#Healthy, HPV, CT: Chlamydia trachomatis, and HPV/CT coinfected group. Phyla and genre are identified by colors as indicated. Numbers are absolute abundance 
+# Figure1: Fig. 1 Relative abundance expressed in percentage (%) of the ten most abundant bacteria genera (a) and species (b) obtained from the studied groups 
+#(Healthy, HPV/CT: co-infection group, HPV and CT: Chlamydia trachomatis). 
 ps<-ps_CST
 
 #Agglomerate taxa
@@ -167,74 +164,30 @@ filterGenus = c("Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium", "Variovora
 ps_genus = subset_taxa(ps_genus, !Genus %in% filterGenus)
 ps_genus
 
-# Sort by top 10 genus
-top10P.genus = sort(tapply(taxa_sums(ps_genus), tax_table(ps_genus)[, "Genus"], sum), TRUE)[1:10]
-top10P = subset_taxa(ps_genus, Genus %in% names(top10P.genus))
-
-#Plot
-plot_bar(top10P , x="Group", fill="Genus",facet_grid = ~Phylum) +
-  geom_bar(aes(color=Genus, fill=Genus), stat="identity", position="stack")
-
-##Figure2:  Bar plot of the relative abundance of the top 10 dominant species in each community state type (CST).
- phy <- normalize(ps_genus, method = "rarefy")
-  plotbar(phy,level="Genus", group="New_var",
-         color = met.brewer("Troy", 10),
-         top = 10,
-         fontsize.x = 10,
-         fontsize.y = 12)
-         
-##Figure 4: heatmap
-ps1 <- tax_glom(ps,taxrank = "Species")
-heat.sample <- plot_taxa_heatmap(ps1, subset.top = 30,
-                                 Variable = c("New_var", "Group"),
-                                 heatcolors = met.brewer("Troy",30),
-                                 transformation = "compositional")
-#Figure supplementary file
-#Lactobacillus species relative abundance 
-#subset phyloseq object to include only genus Lactobacillus
-Lactobacillus = subset_taxa(ps, Genus == "Lactobacillus")
-phy <- normalize(Lactobacillus, method = "rarefy")
-
-#by group
+#Genus by group
+plotbar(phy,level="Genus", group="Group",
+        color = met.brewer("Troy", 5),
+        top = 5,
+        fontsize.x = 10,
+        fontsize.y = 12)
+#Species by group
 plotbar(phy,level="Species", group="Group",
         color = met.brewer("Troy", 5),
         top = 5,
         fontsize.x = 10,
         fontsize.y = 12)
-#by CST
-plotbar(phy,level="Species", group="New_var",
-        color = met.brewer("Troy", 5),
-        top = 5,
-        fontsize.x = 10,
-        fontsize.y = 12)
+
 #Diversity analysis
 ##Alpha diversity (package microbial)
 
- #Figure 3
- plotalpha(ps, 
-           group = "New_var",
-           method = c("Observed", "Simpson", "Shannon", "Chao1"),
-           color = met.brewer("Troy",6))
-#Figure 5:
+ #Figure 2: Bacterial alpha diversity of the studied groups (Healthy, HPV/CT: co-infection group, HPV and CT: Chlamydia trachomatis). The box-plots show the alpha diversity 
+ #by means of observed Amplicon Sequence Variant (ASV), and Chao1, Shannon and Simpson indexes. ***: p≤ 0.001; **: 0.001 < p < 0.01; *: p < 0.05. 
+ library (Microbial)
  plotalpha(ps, 
            group = "Group",
            method = c("Observed", "Simpson", "Shannon", "Chao1"),
-           color = met.brewer("Troy",4))
- #Figure 6:
-##Alpha diversity box plot with p values
-a_my_comparisons <- list( c("Normale","Anormale" ))
-symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))
-
-#we can rarefy in order to bring the samples to the same depth
-# rarefy without replacement
-ps.rarefied <- rarefy_even_depth(ps, rngseed=1, sample.size=0.9*min(sample_sums(ps)), replace=F)
-
-#Plot
-plot_richness(ps.rarefied, x="Cytologie", measures=c("Shannon", "Simpson", "Chao1", "Observed"), color = "Group")+
-  geom_boxplot(alpha=0.6)+ 
-  theme(legend.position="right", axis.text.x=element_text(angle=45,hjust=1,vjust=1,size=12))+
-  stat_compare_means(method = "t.test", comparisons = a_my_comparisons, label = "p.signif", symnum.args = symnum.args)+
-  scale_color_manual(values=met.brewer("Troy", 4))
+           color = met.brewer("Troy",6))
+ 
 
 ##Beta diversity (library(vegan))
 metadata <- data.frame(sample_data(ps.rarefied))
@@ -242,7 +195,9 @@ metadata <- data.frame(sample_data(ps.rarefied))
 ord_unifrac <- ordinate(ps.rarefied, method = "PCoA", distance = "wunifrac") 
 ord_unifrac_un <- ordinate(ps.rarefied, method = "PCoA", distance = "unifrac")   
 
-# Figure : Plot ordinations
+# Figure 3: Beta diversity of cervical microbiota of the studied groups (Healthy, HPV/CT+, HPV+ and CT+). The Figure shows a scatter plot, generated using principal coordinates analysis (PCoA) from Unweighted (a) and Weighted (b) UniFrac analyses, 
+#showing the distance of microbial communities among women. Each group is identified by colors as indicated on the right side of the figure. 
+
 a <- plot_ordination(ps.rarefied, ord_unifrac, color = "Group") + geom_point(size = 2)+scale_color_manual(values =met.brewer("Troy",5) )
 b <- plot_ordination(ps.rarefied, ord_unifrac_un, color = "Group") + geom_point(size = 2)+scale_color_manual(values =met.brewer("Troy",5) )
 cowplot::plot_grid(a, b, nrow = 1, ncol = 2, scale = .9, labels = c("Weighted", "Unweighted"))
@@ -291,114 +246,21 @@ write.csv(p.table, "pairewise adonis dist bray.csv")
 write.csv(p.table, "pairewise adonis dist unweighted.csv")
 write.csv(p.table, "pairewise adonis dist weighted.csv")
 
-##Differential abundance analysis 
-#ANCOMBC 
+#Figure 4:Bacterial alpha diversity of the studied groups by cytology results. The box-plot figures show alpha 
+#diversity of bacterial communities in the four study groups Healthy, HPV/CT: co-infection group, HPV and CT: Chlamydia trachomatis by means of observed, 
+#Chao1 richness index, and Shannon and Simpson indexes.
 
-ps<- tax_glom(ps_CST, taxrank = "Genus")
+##Alpha diversity box plot with p values
+a_my_comparisons <- list( c("Normale","Anormale" ))
+symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))
 
-#manually change the reference level, for instance, setting "Healthy"as the reference level, use:
-sample_data(ps)$Group <- as.factor(sample_data(ps)$Group)
-sample_data(ps)$Group <- relevel(sample_data(ps)$Group, "Healthy")
+#we can rarefy in order to bring the samples to the same depth
+# rarefy without replacement
+ps.rarefied <- rarefy_even_depth(ps, rngseed=1, sample.size=0.9*min(sample_sums(ps)), replace=F)
 
-#Run ancombc function
-out = ancombc(phyloseq=ps, formula="Group", 
-              p_adj_method = 'holm', lib_cut=1000,
-              group='Group', struc_zero=F, neg_lb=TRUE, tol = 1e-5,
-              max_iter=100, conserve=TRUE, alpha = 0.05, global=TRUE)
-res = out$res
-res_global = out$res_global
-write.csv(res_global, "res_global final .csv")
-
-#Visualization
-ancom <- out
-chlamydia <- tibble(W=ancom$res$W$GroupCT, lfc=ancom$res$beta$GroupCT, ASV=rownames(ancom$res$W),q=ancom$res$q_val$GroupCT)
-n_taxa = ifelse(is.null(ancom$zero_ind), 
-                nrow(ancom$feature_table), 
-                sum(apply(ancom$zero_ind, 1, sum) == 0))
-
-cut_off = 0.7 * (n_taxa - 1)
-chlamydia %>% 
-  mutate(sig_fill = case_when( 
-    q < 0.05 ~ 'sig',
-    T ~ 'insig'
-  ) ) %>%
-  ggplot(aes(x=ASV, y=W, fill=sig_fill)) +
-  geom_point(shape=21, size=2, aes(alpha=0.9)) +
-  theme_bw() + 
-  theme(legend.position = 'none',
-        axis.ticks.x = element_blank(),
-        axis.text.x = element_blank(),
-        panel.grid.major.x = element_blank(),
-  ) +
-  scale_x_discrete(expand=expansion(add =c(2,2))) +
-  ylim(-5,5) +
-  scale_fill_manual(values=c('#000000','#FF0000')) +
-  annotate('text',x=4,y=-4,label='',hjust=0, fontface='bold') 
-
-#Enhancedvolcano plot for Chlamydia positive group
-EnhancedVolcano(chlamydia, 
-                title=NULL,
-                subtitle=NULL,
-                lab=NA,
-                selectLab = NULL,
-                x='lfc', y='q', 
-                pCutoff = 0.05, 
-                FCcutoff = 20,
-                xlab = bquote(~Log[2]~'fold change'),
-                ylim=c(0,3),xlim=c(-3,3),
-                caption=NULL,
-                legendPosition= 'none'
-) + 
-  labs(caption=c('Chlamydia','Healthy')) + theme(plot.caption = element_text(hjust=c(0,1))) +
-  annotate("text", x=0,y=1.4,label='adj p <0.05') +
-  annotate("text",x=3.0,y=0.13, label=' W[0.7] > 102', angle=90, parse=T,hjust=0) + 
-  annotate("text",x=3.0,y=0.11, label='???', hjust=0) + 
-  annotate("text",x=-2.8,y=0.13, label=' W[0.7] < -102', angle=90, parse=T,hjust=0) +
-  annotate("text",x=-3.0,y=0.11, label='???' ,hjust=0) + 
-  annotate("text",x=-1.7,y=1.5, label='B. fragilis', fontface='bold',hjust=0) 
-
-#Visualization Healthy vs HPV
-HPV <- tibble(W=ancom$res$W$'GroupHPV', lfc=ancom$res$beta$'GroupHPV', ASV=rownames(ancom$res$W),q=ancom$res$q_val$'GroupHPV')
-n_taxa = ifelse(is.null(ancom$zero_ind), 
-                nrow(ancom$feature_table), 
-                sum(apply(ancom$zero_ind, 1, sum) == 0))
-
-cut_off = 0.7 * (n_taxa - 1)
-HPV%>% 
-  mutate(sig_fill = case_when( 
-    q < 0.05 ~ 'sig',
-    T ~ 'insig'
-  ) ) %>%
-  ggplot(aes(x=ASV, y=W, fill=sig_fill)) +
-  geom_point(shape=21, size=2, aes(alpha=0.9)) +
-  theme_bw() + 
-  theme(legend.position = 'none',
-        axis.ticks.x = element_blank(),
-        axis.text.x = element_blank(),
-        panel.grid.major.x = element_blank(),
-  ) +
-  scale_x_discrete(expand=expansion(add =c(2,2))) +
-  ylim(-5,5) +
-  scale_fill_manual(values=c('#000000','#FF0000')) +
-  annotate('text',x=4,y=-4,label='',hjust=0, fontface='bold') 
-#Enhancedvolcano plot for HPV positive group
-EnhancedVolcano(HPV, 
-                title=NULL,
-                subtitle=NULL,
-                lab=NA,
-                selectLab = NULL,
-                x='lfc', y='q', 
-                pCutoff = 0.05, 
-                FCcutoff = 20,
-                xlab = bquote(~Log[2]~'fold change'),
-                ylim=c(0,3),xlim=c(-3,3),
-                caption=NULL,
-                legendPosition= 'none'
-) + 
-  labs(caption=c('HPV','Healthy')) + theme(plot.caption = element_text(hjust=c(0,1))) +
-  annotate("text", x=0,y=1.4,label='adj p <0.05') +
-  annotate("text",x=3.0,y=0.13, label=' W[0.7] > 102', angle=90, parse=T,hjust=0) + 
-  annotate("text",x=3.0,y=0.11, label='???', hjust=0) + 
-  annotate("text",x=-2.8,y=0.13, label=' W[0.7] < -102', angle=90, parse=T,hjust=0) +
-  annotate("text",x=-3.0,y=0.11, label='???' ,hjust=0) + 
-  annotate("text",x=-1.7,y=1.5, label='R. alistipes', fontface='bold',hjust=0) 
+#Plot
+plot_richness(ps.rarefied, x="Cytologie", measures=c("Shannon", "Simpson", "Chao1", "Observed"), color = "Group")+
+  geom_boxplot(alpha=0.6)+ 
+  theme(legend.position="right", axis.text.x=element_text(angle=45,hjust=1,vjust=1,size=12))+
+  stat_compare_means(method = "t.test", comparisons = a_my_comparisons, label = "p.signif", symnum.args = symnum.args)+
+  scale_color_manual(values=met.brewer("Troy", 4))
